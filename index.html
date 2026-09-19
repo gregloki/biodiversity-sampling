@@ -1,0 +1,1374 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ระบบนิเวศจำลอง — สุ่มแปลงและสร้าง species accumulation curve</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bai+Jamjuree:wght@500;600;700&family=IBM+Plex+Sans+Thai:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#E9EDE5; --surface:#FFFFFF; --surface-2:#F3F6EF; --ink:#15231C; --ink-2:#51625A;
+  --line:#CBD4C7; --line-soft:#DFE6DA;
+  --veg:#2F6B4B; --soil:#C9A97A; --road:#9BA3A6;
+  --accent:#1668C9; --accent-soft:#DDE9F9; --accent-ink:#0E4A93;
+  --warn:#A9492F; --ok:#2F6B4B;
+  --shadow:0 1px 0 rgba(21,35,28,.06), 0 6px 22px -12px rgba(21,35,28,.35);
+  --dim:rgba(233,237,229,.72);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#101813; --surface:#19221C; --surface-2:#212B24; --ink:#E7EEE7; --ink-2:#A0B1A5;
+    --line:#2E3B33; --line-soft:#26302A;
+    --veg:#3F8C63; --soil:#BC9C70; --road:#7B8588;
+    --accent:#63A4F2; --accent-soft:#16304C; --accent-ink:#A9CDF9;
+    --warn:#E08066; --ok:#63B98C;
+    --shadow:0 1px 0 rgba(0,0,0,.3), 0 10px 26px -14px rgba(0,0,0,.8);
+    --dim:rgba(16,24,19,.74);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#101813; --surface:#19221C; --surface-2:#212B24; --ink:#E7EEE7; --ink-2:#A0B1A5;
+  --line:#2E3B33; --line-soft:#26302A;
+  --veg:#3F8C63; --soil:#BC9C70; --road:#7B8588;
+  --accent:#63A4F2; --accent-soft:#16304C; --accent-ink:#A9CDF9;
+  --warn:#E08066; --ok:#63B98C;
+  --shadow:0 1px 0 rgba(0,0,0,.3), 0 10px 26px -14px rgba(0,0,0,.8);
+}
+*{box-sizing:border-box}
+[hidden]{display:none !important}
+html,body{margin:0;padding:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:"IBM Plex Sans Thai","Noto Sans Thai",system-ui,-apple-system,"Segoe UI",sans-serif;
+  font-weight:400; font-size:15px; line-height:1.55;
+  -webkit-text-size-adjust:100%;
+}
+h1,h2,h3,.num{font-family:"Bai Jamjuree","IBM Plex Sans Thai",system-ui,sans-serif;}
+.wrap{max-width:760px;margin:0 auto;padding:14px 14px 72px;}
+header.top{padding:6px 2px 12px}
+h1{font-size:21px;line-height:1.3;margin:0 0 2px;font-weight:700;letter-spacing:-.01em}
+.sub{color:var(--ink-2);font-size:13.5px;margin:0}
+.chips{display:flex;gap:7px;overflow-x:auto;padding:12px 0 4px;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{
+  flex:0 0 auto;border:1px solid var(--line);background:var(--surface);color:var(--ink);
+  border-radius:999px;padding:7px 13px;font-size:14px;font-family:inherit;cursor:pointer;
+  display:flex;align-items:center;gap:7px;
+}
+.chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.chip .dot{width:7px;height:7px;border-radius:50%;background:var(--line);}
+.chip[data-has="1"] .dot{background:var(--ok)}
+.chip[aria-pressed="true"] .dot{background:#fff}
+.tabs{display:flex;gap:4px;background:var(--surface-2);border:1px solid var(--line-soft);border-radius:12px;padding:4px;margin:10px 0 14px}
+.tabs button{
+  flex:1;border:0;background:transparent;color:var(--ink-2);font-family:inherit;font-size:14px;
+  padding:8px 6px;border-radius:9px;cursor:pointer;font-weight:500;
+}
+.tabs button[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+.card{background:var(--surface);border:1px solid var(--line-soft);border-radius:14px;padding:14px;margin-bottom:14px;box-shadow:var(--shadow)}
+.card h2{font-size:15.5px;margin:0 0 3px;font-weight:600}
+.card p.hint{margin:0 0 10px;color:var(--ink-2);font-size:13px}
+canvas#map{width:100%;height:auto;display:block;touch-action:manipulation;border-radius:8px}
+.legend{display:flex;flex-wrap:wrap;gap:12px;margin-top:10px;font-size:13px;color:var(--ink-2)}
+.legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:6px;vertical-align:-1px}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+button.btn{
+  font-family:inherit;font-size:15px;font-weight:500;border-radius:11px;padding:12px 10px;cursor:pointer;
+  border:1px solid var(--line);background:var(--surface);color:var(--ink);
+}
+button.btn:disabled{opacity:.42;cursor:not-allowed}
+button.btn.primary{grid-column:1 / -1;background:var(--accent);border-color:var(--accent);color:#fff;font-size:16px;font-weight:600;padding:14px}
+button.btn.quiet{font-size:13.5px;padding:9px;color:var(--ink-2)}
+button.btn:focus-visible,.chip:focus-visible,.tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(88px,1fr));gap:8px;margin-top:12px}
+.stat{background:var(--surface-2);border-radius:10px;padding:9px 8px;text-align:center}
+.stat b{display:block;font-family:"Bai Jamjuree",sans-serif;font-size:19px;font-weight:600;line-height:1.25}
+.stat span{font-size:11.5px;color:var(--ink-2)}
+.grid6{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.grid6 .stat{text-align:left;padding:10px}
+.grid6 .stat b{font-size:17px}
+.quadrat{border:1px solid var(--line-soft);border-radius:12px;overflow:hidden;margin-top:12px}
+.quadrat .qhead{display:flex;align-items:baseline;gap:9px;padding:10px 12px;background:var(--accent-soft);color:var(--accent-ink);flex-wrap:wrap}
+.qhead .cell{font-family:"Bai Jamjuree",sans-serif;font-size:20px;font-weight:700}
+.qhead .meta{font-size:13px;opacity:.9}
+.splist{margin:0;padding:0;list-style:none}
+.splist li{display:flex;justify-content:space-between;gap:10px;padding:7px 12px;border-top:1px solid var(--line-soft);font-size:14px}
+.splist li span.n{font-family:"Bai Jamjuree",sans-serif;font-weight:600;color:var(--ink-2)}
+.tag{font-size:11px;border:1px solid var(--line);border-radius:999px;padding:1px 7px;color:var(--ink-2)}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{text-align:left;padding:7px 6px;border-bottom:1px solid var(--line-soft)}
+th{font-weight:600;color:var(--ink-2);font-size:12.5px;position:sticky;top:0;background:var(--surface)}
+td.n,th.n{text-align:right;font-family:"Bai Jamjuree",sans-serif}
+.scroll{max-height:380px;overflow:auto;-webkit-overflow-scrolling:touch}
+svg.chart{width:100%;height:auto;display:block;overflow:visible}
+.ctrlrow{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.seg{display:flex;border:1px solid var(--line);border-radius:9px;overflow:hidden}
+.seg button{border:0;background:transparent;font-family:inherit;font-size:13px;padding:6px 11px;color:var(--ink-2);cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent-soft);color:var(--accent-ink);font-weight:500}
+.note{font-size:12.5px;color:var(--ink-2);line-height:1.6}
+.empty{text-align:center;color:var(--ink-2);font-size:14px;padding:26px 10px}
+.status{font-size:12px;color:var(--ink-2);display:flex;align-items:center;gap:6px;margin-top:2px}
+.status i{width:7px;height:7px;border-radius:50%;background:var(--ok);display:inline-block}
+.status.local i{background:var(--soil)}
+#toast{
+  position:fixed;left:50%;bottom:18px;transform:translate(-50%,14px);opacity:0;pointer-events:none;
+  background:var(--ink);color:var(--bg);padding:9px 15px;border-radius:999px;font-size:13.5px;
+  transition:opacity .18s ease, transform .18s ease;z-index:50;max-width:88vw;text-align:center;
+}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+@media (prefers-reduced-motion: reduce){#toast{transition:none}}
+.overflow-x{overflow-x:auto}
+.frame{border:1px solid var(--line-soft);border-radius:12px;padding:11px 12px;margin-top:12px;background:var(--surface-2)}
+.frame h3{margin:0 0 8px;font-size:13.5px;font-weight:600;font-family:inherit;color:var(--ink-2)}
+.pills{display:flex;flex-wrap:wrap;gap:6px}
+.pill{
+  border:1px solid var(--line);background:var(--surface);color:var(--ink);font-family:inherit;font-size:13.5px;
+  border-radius:999px;padding:6px 12px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;
+}
+.pill i{width:9px;height:9px;border-radius:2px;display:inline-block}
+.pill[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.pill:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.pills.sub{margin-top:7px}
+.pills.sub .pill{font-size:12.5px;padding:5px 10px;background:transparent}
+.pills.sub .pill[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent-ink)}
+.frameinfo{margin:9px 0 0;font-size:12.5px;color:var(--ink-2)}
+.modebar{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:18px 2px 0;font-size:12.5px;color:var(--ink-2)}
+.modebar button{font-family:inherit;font-size:12.5px;border:1px solid var(--line);background:transparent;
+  color:var(--ink-2);border-radius:999px;padding:5px 11px;cursor:pointer}
+.modebar input{font-family:inherit;font-size:13px;border:1px solid var(--line);background:var(--surface);
+  color:var(--ink);border-radius:9px;padding:6px 10px;width:130px}
+tr.qsep td{border-top:1px solid var(--line)}
+.env{border-top:1px solid var(--line-soft);padding:11px 12px;background:var(--surface-2)}
+.env p{margin:0 0 9px;font-size:13.5px;line-height:1.65}
+.envgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(104px,1fr));gap:7px}
+.envgrid div{background:var(--surface);border:1px solid var(--line-soft);border-radius:9px;padding:7px 9px}
+.envgrid b{display:block;font-family:"Bai Jamjuree",sans-serif;font-size:15px;font-weight:600;line-height:1.3}
+.envgrid span{font-size:11.5px;color:var(--ink-2)}
+.session{display:flex;gap:9px;align-items:flex-start;font-size:13px;color:var(--ink-2);line-height:1.6}
+.envblock{border:1px solid var(--line-soft);border-radius:11px;margin-bottom:9px;overflow:hidden}
+.envblock .eh{padding:8px 11px;background:var(--accent-soft);color:var(--accent-ink);font-size:13.5px;display:flex;gap:8px;flex-wrap:wrap}
+.envblock .eh b{font-family:"Bai Jamjuree",sans-serif}
+td.sub{color:var(--ink-2)}
+@media (min-width:860px){
+  .wrap{max-width:1080px}
+  .two{display:grid;grid-template-columns:minmax(320px,400px) 1fr;gap:16px;align-items:start}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <h1>ระบบนิเวศจำลอง: สุ่มแปลงสำรวจ</h1>
+    <p class="sub">แผนที่ 5 กลุ่ม กลุ่มละ 150 แปลง แปลงละ 3 × 3 เมตร เก็บ species richness และ abundance แล้วดูเส้นโค้งสะสมชนิดแบบสด</p>
+    <div class="status" id="status"><i></i><span>กำลังเชื่อมต่อ…</span></div>
+    <div class="chips" id="chips" role="group" aria-label="เลือกกลุ่ม"></div>
+  </header>
+
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tab-sample" aria-selected="true" aria-controls="p-sample">สุ่มแปลง</button>
+    <button role="tab" id="tab-curve" aria-selected="false" aria-controls="p-curve" data-only="teacher">กราฟ</button>
+    <button role="tab" id="tab-data" aria-selected="false" aria-controls="p-data">ข้อมูลดิบ</button>
+  </div>
+
+  <section id="p-sample" role="tabpanel" aria-labelledby="tab-sample">
+    <div class="two">
+      <div>
+        <div class="card">
+          <h2 id="sessTitle">สภาพอากาศขณะออกสำรวจ</h2>
+          <p class="session" id="sessBody"></p>
+        </div>
+        <div class="card">
+          <h2 id="mapTitle">แผนที่กลุ่มที่ 1</h2>
+          <p class="hint">แตะช่องใดก็ได้เพื่อเก็บแปลงนั้นเอง หรือกดปุ่มด้านล่างให้ระบบสุ่มให้</p>
+          <canvas id="map"></canvas>
+          <div class="legend">
+            <span><i style="background:var(--veg)"></i>พื้นที่มีพืชปกคลุม</span>
+            <span><i style="background:var(--soil)"></i>พื้นดินเปิด</span>
+            <span><i style="background:var(--road)"></i>ปูน (ถนน)</span>
+          </div>
+          <div class="frame">
+            <h3>เลือกพื้นผิวก่อนสุ่ม</h3>
+            <div class="pills" id="stratumPills">
+              <button class="pill" type="button" data-st="all" aria-pressed="true">ทั้งแผนที่</button>
+              <button class="pill" type="button" data-st="soil" aria-pressed="false"><i style="background:var(--veg)"></i>บนดิน</button>
+              <button class="pill" type="button" data-st="road" aria-pressed="false"><i style="background:var(--road)"></i>บนปูน</button>
+            </div>
+            <div class="pills sub" id="soilPills" hidden>
+              <button class="pill" type="button" data-sub="all" aria-pressed="true">ดินทั้งหมด</button>
+              <button class="pill" type="button" data-sub="veg" aria-pressed="false">เฉพาะที่มีพืชปกคลุม</button>
+              <button class="pill" type="button" data-sub="bare" aria-pressed="false">เฉพาะดินเปิด</button>
+            </div>
+            <p class="frameinfo" id="frameInfo"></p>
+          </div>
+          <div class="actions">
+            <button class="btn primary" id="btnDraw">สุ่ม 1 แปลง</button>
+            <button class="btn" id="btnDraw5">สุ่ม 5 แปลง</button>
+            <button class="btn" id="btnUndo">ย้อนกลับ</button>
+            <button class="btn quiet" id="btnReset" style="grid-column:1 / -1">ล้างข้อมูลกลุ่มนี้</button>
+          </div>
+          <div class="strip" id="strip">
+            <div class="stat"><b id="sQ">0</b><span>แปลงที่เก็บแล้ว</span></div>
+            <div class="stat" data-only="teacher"><b id="sA">0</b><span>ตร.ม.</span></div>
+            <div class="stat" data-only="teacher"><b id="sS">0</b><span>ชนิด</span></div>
+            <div class="stat" data-only="teacher"><b id="sN">0</b><span>จำนวนตัว</span></div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="card" id="lastCard">
+          <h2>แปลงล่าสุด</h2>
+          <div id="lastBody"><p class="empty">ยังไม่ได้เก็บแปลง กดปุ่ม “สุ่ม 1 แปลง” เพื่อเริ่ม</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="p-curve" role="tabpanel" aria-labelledby="tab-curve" hidden>
+    <div class="card">
+      <h2>ค่าสรุปของกลุ่มนี้</h2>
+      <p class="hint" id="curveHint">คำนวณจากแปลงที่เก็บแล้วทั้งหมด</p>
+      <div class="grid6">
+        <div class="stat"><b id="mS">0</b><span>S สังเกตได้</span></div>
+        <div class="stat"><b id="mChao">0</b><span>Chao1 ประมาณ</span></div>
+        <div class="stat"><b id="mComp">–</b><span>ความครบถ้วน</span></div>
+        <div class="stat"><b id="mH">0</b><span>Shannon H′</span></div>
+        <div class="stat"><b id="mD">0</b><span>Simpson 1−D</span></div>
+        <div class="stat"><b id="mJ">0</b><span>Pielou J′</span></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Species accumulation curve</h2>
+      <p class="hint">เส้นทึบคือค่าเฉลี่ยจากการสลับลำดับแปลง 200 ครั้ง (rarefaction) แถบจางคือช่วง 95% จุดคือลำดับที่เก็บจริง</p>
+      <div class="ctrlrow">
+        <div class="seg" id="segS">
+          <button data-s="group" aria-pressed="true">กลุ่มนี้</button>
+          <button data-s="pooled" aria-pressed="false">รวมทุกกลุ่ม</button>
+        </div>
+        <div class="seg" id="segF">
+          <button data-f="all" aria-pressed="true">ทุกแปลง</button>
+          <button data-f="soil" aria-pressed="false">เฉพาะบนดิน</button>
+          <button data-f="road" aria-pressed="false">เฉพาะบนปูน</button>
+        </div>
+        <div class="seg" id="segX">
+          <button data-x="q" aria-pressed="true">แกน x: จำนวนแปลง</button>
+          <button data-x="a" aria-pressed="false">พื้นที่ (ตร.ม.)</button>
+        </div>
+      </div>
+      <p class="frameinfo" id="poolInfo" hidden></p>
+      <div id="sacBox"><p class="empty">เก็บอย่างน้อย 2 แปลงเพื่อดูเส้นโค้ง</p></div>
+    </div>
+    <div class="card">
+      <h2>ความชุกชุมเรียงลำดับ</h2>
+      <p class="hint">แกนตั้งเป็นสเกล log ความชันบอกว่าชุมชนถูกครอบงำโดยชนิดเด่นมากแค่ไหน</p>
+      <div id="rankBox"><p class="empty">ยังไม่มีข้อมูล</p></div>
+    </div>
+    <div class="card">
+      <h2>เปรียบเทียบระหว่างกลุ่ม</h2>
+      <p class="hint">เส้น rarefaction ของทุกกลุ่มที่มีข้อมูลแล้ว เทียบกันที่จำนวนแปลงเท่ากัน</p>
+      <div id="cmpBox"><p class="empty">ยังมีข้อมูลไม่ถึง 2 กลุ่ม</p></div>
+    </div>
+  </section>
+
+  <section id="p-data" role="tabpanel" aria-labelledby="tab-data" hidden>
+    <div class="card" data-only="teacher">
+      <h2>รายชนิดที่พบ</h2>
+      <p class="hint" id="spHint">เรียงตามจำนวนตัวรวม</p>
+      <div class="scroll"><table id="spTable"><thead><tr><th>ชนิด</th><th>กลุ่ม</th><th class="n">จำนวนตัว</th><th class="n">พบกี่แปลง</th></tr></thead><tbody></tbody></table></div>
+    </div>
+    <div class="card">
+      <h2>สภาพแวดล้อมรายแปลง</h2>
+      <p class="hint" id="envHint"></p>
+      <div class="scroll" id="envList"></div>
+    </div>
+    <div class="card">
+      <h2>บันทึกรายแปลง</h2>
+      <p class="hint" id="qHint"></p>
+      <div class="scroll"><table id="qTable"><thead id="qHead"></thead><tbody></tbody></table></div>
+      <div class="actions" style="grid-template-columns:1fr 1fr">
+        <button class="btn" id="btnCsvLong">ดาวน์โหลด CSV รายชนิด</button>
+        <button class="btn" id="btnCsvMat">ดาวน์โหลด CSV เมทริกซ์</button>
+      </div>
+      <p class="note" id="dlNote" style="margin-top:8px"></p>
+    </div>
+    <div class="card" data-only="teacher">
+      <h2>ข้อควรรู้ก่อนใช้สอน</h2>
+      <p class="note">
+        แผนที่ถิ่นอาศัยถอดมาจากตารางพื้นดิน/ถนนของแต่ละกลุ่มโดยตรง ช่องที่ไม่อยู่ในตารางถือเป็นพื้นที่มีพืชปกคลุม ในกลุ่มที่ 3 มีช่วงที่ระบุซ้ำทั้งพื้นดินและถนน (G13–G15 และ H6–H11) ระบบให้ถนนมีผลก่อน<br><br>
+        จากนั้นขยายพื้นปูนออกจากแนวถนนเดิมจนทุกแผนที่มีพื้นดิน 75 ช่องและพื้นปูน 75 ช่องเท่ากัน ช่องที่ถูกแปลงเลือกจากที่ติดถนนที่สุดก่อน และแบ่งตามสัดส่วนเดิมของพืชปกคลุมกับดินเปิด ครึ่งที่เป็นดินจึงยังมีทั้งสองแบบ (พืชปกคลุมเหลือ 12-36 ช่องแล้วแต่กลุ่ม) การออกแบบนี้ทำให้ทุกกลุ่มมีจำนวนแปลงให้สุ่มเท่ากันทั้งสองพื้นผิว เปรียบเทียบกันได้ตรง ๆ<br><br>
+        บัญชีชนิดตั้งตามฐานข้อมูลที่ให้มา รวมทั้ง 5 กลุ่มพบบนดิน 107 ชนิด บนปูน 17 ชนิด และ 12 ใน 17 ชนิดนั้นพบบนดินด้วย บัญชีจึงมี 112 ชนิด แยกเป็นเฉพาะบนดิน 95 พบทั้งสองพื้นผิว 12 และเฉพาะบนปูน 5 ระบบรับประกันว่าเมื่อรวมแปลงทั้งหมดของทั้ง 5 กลุ่มจะได้ตัวเลขนี้พอดี แต่ละกลุ่มเดี่ยว ๆ จะพบบนดินราว 51-62 ชนิด และบนปูนราว 11-13 ชนิด<br><br>
+        แต่ละชนิดมีความชอบถิ่นอาศัยและกระจายตัวเป็นหย่อม ตัวเลขคงที่เสมอสำหรับแต่ละกลุ่ม สุ่มแปลงกี่รอบก็อ้างอิงชุมชนชุดเดิม ผลจึงเทียบกันได้ระหว่างนักศึกษา<br><br>
+        ระบบนี้ฝึกการออกแบบการสุ่ม การบันทึกข้อมูล และการอ่านเส้นโค้งได้ แต่แทนการฝึกจำแนกชนิดในภาคสนามไม่ได้ ควรใช้ควบคู่กัน
+      </p>
+    </div>
+  </section>
+  <div class="modebar" id="modeBar"></div>
+</div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+(function(){
+"use strict";
+
+/* ============ 1. แผนที่ถิ่นอาศัย ============ */
+var COLS = "ABCDEFGHIJ".split("");
+var ROWS = 15, NC = 10, NCELL = NC*ROWS, CELL_AREA = 9;
+var VEG=0, SOIL=1, ROAD=2;
+var HAB_NAME = ["พืชปกคลุม","พื้นดิน","ปูน (ถนน)"];
+var STRATA = {
+  all:  {set:[0,1,2], label:"ทั้งแผนที่",      draw:"สุ่ม 1 แปลง",              draw5:"สุ่ม 5 แปลง"},
+  soil: {set:[0,1],   label:"บนดิน",           draw:"สุ่ม 1 แปลงบนดิน",               draw5:"สุ่ม 5 แปลงบนดิน"},
+  veg:  {set:[0],     label:"บนดินที่มีพืชปกคลุม", draw:"สุ่ม 1 แปลงในพื้นที่มีพืชปกคลุม", draw5:"สุ่ม 5 แปลงในพื้นที่มีพืชปกคลุม"},
+  bare: {set:[1],     label:"บนดินเปิด",        draw:"สุ่ม 1 แปลงบนดินเปิด",           draw5:"สุ่ม 5 แปลงบนดินเปิด"},
+  road: {set:[2],     label:"บนปูน",            draw:"สุ่ม 1 แปลงบนปูน",               draw5:"สุ่ม 5 แปลงบนปูน"}
+};
+var HAB_VAR = ["--veg","--soil","--road"];
+
+var GROUPS = [
+ {id:1, soil:"A1-A15,B1-B15,C1-C15,D1-D15,J1-J7", road:"E1-E7,F1-F14,G13"},
+ {id:2, soil:"A1-A15,B1-B13,C1-C11,D1-D8,E1-E4,F1-F2,F14-F15,G10-G15,H6-H15,I2-I15,J1-J15", road:"D13-D15,E9-E15,F5-F10,G3-G4"},
+ {id:3, soil:"A1-A15,B1-B13,C1-C14,D1-D13,E1-E12,F9-F11,G10-G15,H6-H15,I2-I15,J1-J15", road:"F15,G1-G9,G13-G15,H1-H11"},
+ {id:4, soil:"A1-A15,B1-B13,C3-C15,D6-D15,E10-E15,G1-G4,G15,H1-H4,I1-I5,J1-J7", road:"E2-E5,F6-F8,G8-G10,H10-H13,I11-I14,J15"},
+ {id:5, soil:"A1-A15,B1-B15,C1-C15,D1-D13,E1-E11,F1-F7,I1-I3,J1-J4", road:"G1-G15,H1-H8,H14-H15,I6-I7,J6"}
+];
+
+function idx(c,r){ return c*ROWS + r; }             // r = 0..14
+function cellName(i){ return COLS[Math.floor(i/ROWS)] + ((i%ROWS)+1); }
+function parseRanges(str, grid, val){
+  if(!str) return;
+  str.split(",").forEach(function(tok){
+    tok = tok.trim(); if(!tok) return;
+    var p = tok.split("-"), a = p[0].trim(), b = (p[1]||p[0]).trim();
+    var ci = COLS.indexOf(a.charAt(0));
+    var ra = parseInt(a.slice(1),10), rb = parseInt(b.slice(1),10);
+    if(ci<0 || isNaN(ra) || isNaN(rb)) return;
+    for(var r=Math.min(ra,rb); r<=Math.max(ra,rb); r++) grid[idx(ci, r-1)] = val;
+  });
+}
+/* ขยายพื้นปูนออกจากแนวถนนเดิม จนแต่ละแผนที่มีพื้นดิน 75 ช่องและพื้นปูน 75 ช่องเท่ากัน
+   ช่องที่ถูกแปลงเลือกจากที่อยู่ใกล้ถนนที่สุดก่อน และแบ่งตามสัดส่วนเดิมของพืชปกคลุมกับดินเปิด
+   เพื่อให้ครึ่งที่เป็นดินยังคงลักษณะของแผนที่ต้นฉบับไว้ */
+function balanceGrid(G){
+  var target = Math.round(NCELL/2), i, road = 0, veg = [], bare = [];
+  for(i=0;i<NCELL;i++){ if(G[i]===ROAD) road++; else if(G[i]===VEG) veg.push(i); else bare.push(i); }
+  if(road >= target) return G;
+  var dist = new Int16Array(NCELL); dist.fill(9999);
+  var q = [];
+  for(i=0;i<NCELL;i++) if(G[i]===ROAD){ dist[i] = 0; q.push(i); }
+  for(var h=0; h<q.length; h++){
+    var c = q[h], ci = Math.floor(c/ROWS), ri = c%ROWS;
+    [[1,0],[-1,0],[0,1],[0,-1]].forEach(function(d){
+      var nc = ci+d[0], nr = ri+d[1];
+      if(nc<0||nc>=NC||nr<0||nr>=ROWS) return;
+      var j = nc*ROWS + nr;
+      if(dist[j] > dist[c]+1){ dist[j] = dist[c]+1; q.push(j); }
+    });
+  }
+  var need = target - road, tot = veg.length + bare.length;
+  var takeVeg = Math.round(need*veg.length/tot), takeBare = need - takeVeg;
+  if(takeBare > bare.length){ takeVeg += takeBare - bare.length; takeBare = bare.length; }
+  if(takeVeg > veg.length){ takeBare += takeVeg - veg.length; takeVeg = veg.length; }
+  var byDist = function(a,b){ return dist[a]-dist[b] || a-b; };
+  veg.sort(byDist); bare.sort(byDist);
+  for(i=0;i<takeVeg;i++) G[veg[i]] = ROAD;
+  for(i=0;i<takeBare;i++) G[bare[i]] = ROAD;
+  return G;
+}
+function habitatGrid(g){
+  var grid = new Uint8Array(NCELL); grid.fill(VEG);
+  parseRanges(g.soil, grid, SOIL);
+  parseRanges(g.road, grid, ROAD);   // ถนนมีผลทับพื้นดินเมื่อระบุซ้ำ
+  return balanceGrid(grid);
+}
+
+/* ============ 2. สุ่มแบบคงที่ + ชุมชนจำลอง ============ */
+function mulberry32(a){ return function(){
+  a |= 0; a = (a + 0x6D2B79F5) | 0;
+  var t = Math.imul(a ^ (a>>>15), 1|a);
+  t = (t + Math.imul(t ^ (t>>>7), 61|t)) ^ t;
+  return ((t ^ (t>>>14))>>>0) / 4294967296;
+};}
+function gauss(rng){ var u=0,v=0; while(u===0)u=rng(); while(v===0)v=rng();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+function poisson(rng, lam){
+  if(lam<=0) return 0;
+  if(lam<30){ var L=Math.exp(-lam),k=0,p=1; do{k++;p*=rng();}while(p>L); return k-1; }
+  return Math.max(0, Math.round(lam + Math.sqrt(lam)*gauss(rng)));
+}
+/* บัญชีชนิดอ้างอิงฐานข้อมูลจริง: บนดิน 107 ชนิด บนปูน 17 ชนิด และ 12 ชนิดพบทั้งสองพื้นผิว
+   จึงแบ่งเป็น เฉพาะบนดิน 95 + พบทั้งสอง 12 + เฉพาะบนปูน 5 = 112 ชนิดในบัญชี */
+var N_SOIL_ONLY = 95, N_BOTH = 12, N_ROAD_ONLY = 5;
+var LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+function lbl(i){ return i<26 ? LETTERS[i] : LETTERS[Math.floor(i/26)-1] + LETTERS[i%26]; }
+var TAXA = {P:"พืช", I:"แมลง", B:"นก"};
+var ROLE_MIX = { soilOnly:{P:40,I:39,B:16}, both:{P:4,I:5,B:3}, roadOnly:{P:2,I:2,B:1} };
+var AFFIN = {
+  veg: {v:1.00, s:0.18, r:0,    label:"ชอบพื้นที่มีพืชปกคลุม"},
+  bare:{v:0.22, s:1.00, r:0,    label:"ชอบดินเปิด"},
+  gen: {v:1.00, s:0.75, r:0,    label:"พบทั่วไปบนดิน"},
+  both:{v:0.35, s:0.85, r:1.00, label:"พบได้ทั้งบนดินและบนปูน"},
+  road:{v:0,    s:0,    r:1.00, label:"พบเฉพาะบนปูน"}
+};
+var POOL = (function(){
+  var rng = mulberry32(20260919), pool = [], cnt = {P:0, I:0, B:0};
+  ["soilOnly","both","roadOnly"].forEach(function(role){
+    ["P","I","B"].forEach(function(k){
+      for(var j=0; j<ROLE_MIX[role][k]; j++){
+        var pref;
+        if(role==="soilOnly"){ var u = rng(); pref = u<0.46 ? "veg" : u<0.76 ? "bare" : "gen"; }
+        else pref = (role==="both") ? "both" : "road";
+        var muN = k==="P" ? Math.log(8) : k==="I" ? Math.log(9) : Math.log(4);
+        var sdN = k==="P" ? 1.95 : k==="I" ? 2.05 : 1.5;
+        muN += (role!=="soilOnly") ? Math.log(3.2) : Math.log(0.40);   // ปรับความหนาแน่นให้เข้ากับพื้นที่ครึ่งต่อครึ่ง
+        pool.push({
+          code:k+"-"+lbl(cnt[k]), name:TAXA[k]+" sp. "+lbl(cnt[k]), taxon:TAXA[k],
+          role:role, pref:pref, aff:AFFIN[pref],
+          baseN:Math.exp(muN + sdN*gauss(rng)), aggr:0.55 + 0.44*rng()
+        });
+        cnt[k]++;
+      }
+    });
+  });
+  return pool;
+})();
+var NSP = POOL.length, WORDS = Math.ceil(NSP/32);
+
+var TRUTH = null;
+function buildGroupTruth(gid){
+  var g = GROUPS[gid-1], grid = habitatGrid(g), rng = mulberry32(7000 + gid*131);
+  var counts = [], best = [];
+  POOL.forEach(function(sp){
+    var cell = new Uint16Array(NCELL), bs = {i:-1,w:0}, br = {i:-1,w:0};
+    var pP = 0.30 + 0.66/(1+Math.exp(-(Math.log(sp.baseN)-Math.log(8))/0.85));
+    if(sp.role!=="soilOnly") pP = Math.max(pP, 0.75);
+    var present = rng() <= pP;
+    var N = Math.round(sp.baseN*Math.exp(0.5*gauss(rng)));
+    var k = 1+Math.floor(rng()*3), centers = [];
+    for(var c=0;c<k;c++) centers.push({x:rng()*NC, y:rng()*ROWS, r:0.9+rng()*2.1});
+    var w = new Float64Array(NCELL), sum = 0;
+    for(var ci=0; ci<NC; ci++) for(var ri=0; ri<ROWS; ri++){
+      var i = idx(ci,ri), h = grid[i];
+      var a = h===VEG ? sp.aff.v : h===SOIL ? sp.aff.s : sp.aff.r;
+      var f = 0.22*(1-sp.aggr);
+      for(var q=0;q<centers.length;q++){
+        var dx=ci+0.5-centers[q].x, dy=ri+0.5-centers[q].y, rr=centers[q].r;
+        f += sp.aggr*2.2*Math.exp(-(dx*dx+dy*dy)/(2*rr*rr));
+      }
+      w[i] = f*a; sum += w[i];
+      if(h===ROAD){ if(w[i]>br.w) br = {i:i, w:w[i]}; }
+      else if(w[i]>bs.w) bs = {i:i, w:w[i]};
+    }
+    best.push({soil:bs, road:br});
+    if(present && N>0 && sum>0) for(var j=0;j<NCELL;j++) cell[j] = poisson(rng, N*w[j]/sum);
+    counts.push(cell);
+  });
+  return {grid:grid, counts:counts, best:best};
+}
+function buildAllTruths(){
+  var T = {}, g;
+  for(g=1; g<=5; g++) T[g] = buildGroupTruth(g);
+  // ให้ผลรวมทั้ง 5 กลุ่มตรงกับฐานข้อมูล: ทุกชนิดต้องปรากฏอย่างน้อยหนึ่งครั้งในพื้นผิวที่ควรพบ
+  POOL.forEach(function(sp, si){
+    ["soil","road"].forEach(function(kind){
+      var need = kind==="soil" ? (sp.role!=="roadOnly") : (sp.role!=="soilOnly");
+      if(!need) return;
+      var found = false, gg, i;
+      for(gg=1; gg<=5 && !found; gg++){
+        var t = T[gg];
+        for(i=0;i<NCELL;i++) if(t.counts[si][i]>0 && ((t.grid[i]===ROAD) === (kind==="road"))){ found = true; break; }
+      }
+      if(found) return;
+      var bg = 0, bw = -1, bi = -1;
+      for(gg=1; gg<=5; gg++){ var b = T[gg].best[si][kind]; if(b.i>=0 && b.w>bw){ bw = b.w; bg = gg; bi = b.i; } }
+      if(bi>=0) T[bg].counts[si][bi] += 1;
+    });
+  });
+  for(g=1; g<=5; g++){
+    var t2 = T[g], bits = [];
+    for(var i2=0;i2<NCELL;i2++){
+      var wd = new Uint32Array(WORDS);
+      for(var s2=0;s2<NSP;s2++) if(t2.counts[s2][i2]>0) wd[s2>>5] |= (1<<(s2&31));
+      bits.push(wd);
+    }
+    t2.bits = bits;
+  }
+  return T;
+}
+function truthFor(gid){
+  if(!TRUTH) TRUTH = buildAllTruths();
+  return TRUTH[gid];
+}
+function quadratOf(gid, i){
+  var t = truthFor(gid), list = [], N = 0;
+  for(var s=0;s<NSP;s++){ var c = t.counts[s][i]; if(c>0){ list.push({s:s, n:c}); N += c; } }
+  list.sort(function(a,b){ return b.n-a.n; });
+  return {cell:i, habitat:t.grid[i], sp:list, S:list.length, N:N};
+}
+
+/* ============ 2.5 สภาพแวดล้อมรายแปลง ============ */
+/* ทุกกลุ่มออกสำรวจพร้อมกัน สภาพอากาศจึงเป็นชุดเดียวกันทั้งห้าแผนที่
+   ความต่างของอุณหภูมิระหว่างแปลงจึงมาจากร่มเงาและพื้นผิวล้วน ๆ ไม่ใช่เพราะสำรวจคนละเวลา */
+var SESSION = {time:"10:00 - 11:30 น.", sky:"ท้องฟ้าโปร่ง มีเมฆบางส่วน แดดค่อนข้างแรง",
+               wind:"ลมพัดอ่อน", base:32.0, rh:58, sun:0.80, wet:false};
+var DIST_LABEL = ["", "น้อยมาก", "น้อย", "ปานกลาง", "ค่อนข้างสูง", "สูงมาก"];
+function pick(rng, arr){ return arr[Math.floor(rng()*arr.length)]; }
+function roadDist(gid){
+  var t = truthFor(gid);
+  if(t.droad) return t.droad;
+  var d = new Int16Array(NCELL); d.fill(999); var q = [], i;
+  for(i=0;i<NCELL;i++) if(t.grid[i]===ROAD){ d[i] = 0; q.push(i); }
+  for(var h=0; h<q.length; h++){
+    var c = q[h], ci = Math.floor(c/ROWS), ri = c%ROWS;
+    [[1,0],[-1,0],[0,1],[0,-1]].forEach(function(v){
+      var nc = ci+v[0], nr = ri+v[1];
+      if(nc<0||nc>=NC||nr<0||nr>=ROWS) return;
+      var j = nc*ROWS+nr;
+      if(d[j] > d[c]+1){ d[j] = d[c]+1; q.push(j); }
+    });
+  }
+  t.droad = d; return d;
+}
+var ENVCACHE = {};
+function envOf(gid, i){
+  var key = gid+":"+i;
+  if(ENVCACHE[key]) return ENVCACHE[key];
+  var t = truthFor(gid), h = t.grid[i], S = SESSION, dr = roadDist(gid)[i];
+  var rng = mulberry32(gid*100003 + i*31 + 17);
+  var r1 = rng(), r2 = rng(), r3 = rng(), r4 = rng(), r5 = rng();
+  var canopy = h===VEG ? Math.round(52+43*r1) : h===SOIL ? Math.round(4+31*r1) : Math.round(14*r1*r1);
+  var open = 1 - canopy/100;
+  var off = h===VEG ? -1.7 : h===SOIL ? 0.3 : 1.5;
+  var tAir = S.base + off + open*S.sun*2.6 + (r2-0.5)*1.1;
+  var tSurf = tAir + (h===ROAD ? 5.5+9*S.sun : h===SOIL ? 2.5+5.5*S.sun : 0.4+1.6*S.sun)*(0.85+0.3*r3);
+  var rh = S.rh + (h===VEG?7:h===SOIL?0:-6) - (tAir-S.base)*1.6 + (r4-0.5)*4;
+  rh = Math.max(34, Math.min(96, rh));
+  var dl;
+  if(h===ROAD) dl = r5<0.45 ? 5 : 4;
+  else {
+    var b = dr<=1 ? 4 : dr<=3 ? 3 : dr<=5 ? 2 : 1;
+    if(h===VEG) b -= 1;                       // ใต้ร่มไม้มีร่องรอยการเหยียบย่ำน้อยกว่า
+    if(r5<0.15) b += 1; else if(r5>0.88) b -= 1;
+    dl = Math.max(1, Math.min(5, b));
+  }
+  var ev;
+  if(h===ROAD) ev = pick(rng,[["รอยล้อรถยนต์ชัดเจน","เศษขยะพลาสติก 2-3 ชิ้น"],["ก้นบุหรี่และถุงพลาสติก","คราบน้ำมันเครื่อง"],["มีคนเดินผ่านระหว่างสำรวจ","เศษวัสดุก่อสร้างกองริมทาง"]]);
+  else if(dl>=3) ev = pick(rng,[["รอยเหยียบย่ำเป็นทางเดิน","เศษขยะปลิวมาจากถนน"],["ร่องรอยการตัดหญ้าใหม่","กองเศษกิ่งไม้ถูกกวาดมารวม"],["รอยล้อรถจักรยานยนต์ตัดผ่าน","ดินถูกอัดแน่นจนแข็ง"]]);
+  else if(dl===2) ev = pick(rng,[["มีร่องรอยการตัดหญ้าเป็นบางส่วน"],["พบเศษขยะชิ้นเล็ก 1 ชิ้น"],["มีทางเดินเท้าเก่าจาง ๆ"]]);
+  else ev = pick(rng,[["ไม่พบร่องรอยกิจกรรมมนุษย์"],["พบเพียงเสียงรถจากระยะไกล"]]);
+  var desc;
+  if(h===VEG){
+    desc = pick(rng,["อยู่ใต้พุ่มไม้และไม้พื้นล่างค่อนข้างหนาทึบ","อยู่ใต้ร่มเงาไม้ยืนต้น แสงส่องถึงพื้นเป็นหย่อม",
+      "เป็นแนวชายพุ่มไม้ติดกับพื้นที่โล่ง"]) +
+      " เรือนยอดปกคลุมราว " + canopy + "% พื้นมีเศษซากใบไม้หนาประมาณ " + (1+Math.round(r3*4)) + " เซนติเมตร " +
+      pick(rng, S.wet ? ["ชั้นใบไม้อมน้ำฝนจนแฉะ","ดินอิ่มน้ำ กดแล้วมีน้ำซึมขึ้นมา","ดินชื้นจัดและมีรากฝอยหนาแน่นใต้ชั้นใบไม้"]
+                        : ["ดินร่วนชื้น กดแล้วยุบตัว","ดินร่วนปนทราย ผิวหน้าชื้นเล็กน้อย","ดินชื้นและมีรากฝอยหนาแน่นใต้ชั้นใบไม้"]) + " " +
+      pick(rng,["มีรากไม้ใหญ่โผล่พาดผ่านช่อง","มีเถาวัลย์เลื้อยคลุมบางส่วน","มีต้นกล้าไม้ขึ้นกระจายทั่วช่อง","มีขอนไม้ผุวางอยู่มุมหนึ่งของช่อง"]);
+  } else if(h===SOIL){
+    desc = pick(rng,["เป็นพื้นดินเปิดโล่ง แสงแดดส่องถึงพื้นเกือบตลอด","เป็นที่โล่งมีหญ้าขึ้นประปราย",
+      "เป็นดินเปิดที่ถูกใช้สัญจรเป็นครั้งคราว"]) +
+      " เรือนยอดปกคลุมเพียง " + canopy + "% " +
+      pick(rng, S.wet ? ["ผิวดินเปียกและเหนียวติดรองเท้า","มีน้ำขังเป็นแอ่งตื้นตามรอยล้อ","ผิวดินชุ่มน้ำ เห็นรอยเม็ดฝนชัดเจน"]
+                        : ["ผิวดินแห้งและอัดแน่น","ผิวดินแห้งแตกเป็นแผ่นบาง ๆ","ผิวดินร่วนปนกรวดเล็ก"]) + " " +
+      pick(rng,["มีหญ้าและวัชพืชสูงราว "+(3+Math.round(r4*12))+" เซนติเมตรขึ้นเป็นหย่อม",
+        "มีวัชพืชล้มลุกขึ้นกระจายไม่สม่ำเสมอ","เกือบไม่มีพืชปกคลุม เห็นหน้าดินชัดเจน"]);
+  } else {
+    desc = pick(rng,["เป็นพื้นคอนกรีตขัดหยาบ","เป็นพื้นซีเมนต์เทเรียบ","เป็นลานปูนที่ต่อจากแนวถนน"]) + " " +
+      pick(rng,["มีรอยแตกกว้างราว "+(0.5+Math.round(r3*30)/10)+" เซนติเมตรพาดผ่านช่อง",
+        "มีรอยต่อแผ่นปูนเป็นร่องตรงกลางช่อง","ผิวปูนสึกจนเห็นเม็ดหินโผล่"]) + " " +
+      pick(rng, S.wet ? ["ผิวปูนยังเปียกน้ำฝน มีน้ำขังตื้นตามร่อง ตะไคร่ตามรอยแตกดูเขียวสด",
+        "มีน้ำไหลรินตามร่องรอยต่อ และมีเศษดินถูกน้ำพัดมาทับถมตามขอบ","ผิวปูนเปียกลื่น มีตะไคร่ขึ้นเป็นแถบตามแนวร่อง"]
+        : ["ตามรอยแตกมีตะไคร่และหญ้าเล็ก ๆ งอกแทรก","มีเศษดินและทรายทับถมตามขอบ จึงมีพืชเล็กขึ้นได้บ้าง",
+        "ผิวปูนสะอาด แทบไม่มีเศษดินทับถม"]) + " เรือนยอดปกคลุม " + canopy + "%";
+  }
+  var e = {
+    canopy:canopy, tAir:Math.round(tAir*10)/10, tSurf:Math.round(tSurf*10)/10, rh:Math.round(rh),
+    dLevel:dl, dLabel:DIST_LABEL[dl], evidence:ev, desc:desc, dRoad:dr
+  };
+  ENVCACHE[key] = e; return e;
+}
+
+/* ============ 3. สถานะและการบันทึก ============ */
+var state = { gid:1, runs:{1:[],2:[],3:[],4:[],5:[]}, xMode:"q",
+              stratum:"all", soilSub:"all", curveFilter:"all", scope:"group", mode:"collect" };
+var TEACHER_CODE = "sac2026", MODE_KEY = "ecosim:mode:v1";
+function activeStratum(){ return state.stratum==="soil" && state.soilSub!=="all"
+  ? (state.soilSub==="veg"?"veg":"bare") : state.stratum; }
+function inFrame(h){ return STRATA[activeStratum()].set.indexOf(h) >= 0; }
+var db = null, downloads = null, pending = {}, LS = "ecosim:runs:v1";
+var SHEET = null, SHEET_KEY = "ecosim:sheet:v1", sheetBusy = 0;
+function initSheet(){
+  var u = null;
+  try{ u = new URLSearchParams(location.search).get("sheet"); }catch(e){}
+  if(u){ SHEET = u; try{ localStorage.setItem(SHEET_KEY, u); }catch(e){} }
+  else { try{ SHEET = localStorage.getItem(SHEET_KEY) || null; }catch(e){} }
+}
+function sheetRows(gid, i){
+  var qd = quadratOf(gid, i), env = envCols(gid, i), out = [];
+  if(!qd.sp.length) return [env.concat(["", "ไม่พบชนิดใด", "", 0])];
+  qd.sp.forEach(function(x){
+    var sp = POOL[x.s];
+    out.push(env.concat([sp.code, sp.name, sp.taxon, x.n]));
+  });
+  return out;
+}
+function sheetApply(list){
+  if(!list) return;
+  var by = {1:[],2:[],3:[],4:[],5:[]};
+  list.forEach(function(d){ if(by[d.g]) by[d.g].push(d); });
+  for(var g=1; g<=5; g++){
+    by[g].sort(function(a,b){ return a.seq-b.seq; });
+    applyRemote(g, by[g].map(function(d){ return d.cell; }), by[g].map(function(d){ return d.mode; }));
+  }
+}
+function sheetCall(payload){
+  sheetBusy++;
+  var opts = payload
+    ? {method:"POST", headers:{"Content-Type":"text/plain;charset=utf-8"}, body:JSON.stringify(payload)}
+    : {method:"GET"};
+  return fetch(SHEET, opts)
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if(j && j.draws){ sheetApply(j.draws); renderAll();
+        setStatus(true, "เชื่อมกับ Google Sheet แล้ว ข้อมูลรวมทุกเครื่อง"); }
+      else if(j && j.error) setStatus(false, "ชีตแจ้งข้อผิดพลาด: " + j.error);
+    })
+    .catch(function(){ setStatus(false, "ติดต่อ Google Sheet ไม่ได้ ข้อมูลถูกเก็บในเครื่องนี้ไว้ก่อน"); })
+    .then(function(){ sheetBusy = Math.max(0, sheetBusy-1); });
+}
+function startSheet(){
+  setStatus(false, "กำลังเชื่อมกับ Google Sheet…");
+  sheetCall(null);
+  if(!startSheet.timer) startSheet.timer = setInterval(function(){
+    if(SHEET && !sheetBusy) sheetCall(null);
+  }, 10000);
+}
+
+function applyMode(){
+  var teacher = (state.mode==="teacher");
+  Array.prototype.forEach.call(document.querySelectorAll('[data-only="teacher"]'), function(el){
+    el.hidden = !teacher;
+  });
+  if(!teacher){
+    var tc = document.getElementById("tab-curve");
+    if(tc.getAttribute("aria-selected")==="true"){
+      document.getElementById("tab-sample").click();
+    }
+  }
+  try{ localStorage.setItem(MODE_KEY, state.mode); }catch(e){}
+  renderModeBar();
+}
+function renderModeBar(){
+  var bar = document.getElementById("modeBar");
+  if(state.mode==="teacher"){
+    bar.innerHTML = '<span>โหมดผู้สอน เห็นกราฟและค่าสถิติทั้งหมด</span>' +
+                    '<button type="button" id="modeOut">กลับไปโหมดเก็บข้อมูล</button>' +
+                    '<button type="button" id="sheetBtn">' + (SHEET ? "เปลี่ยน Google Sheet" : "เชื่อม Google Sheet") + '</button>' +
+                    (SHEET ? '<button type="button" id="sheetLink">คัดลอกลิงก์สำหรับนักศึกษา</button>' : '');
+    document.getElementById("modeOut").addEventListener("click", function(){
+      state.mode = "collect"; applyMode(); renderAll();
+    });
+    document.getElementById("sheetBtn").addEventListener("click", function(){
+      bar.innerHTML = '<span>วาง URL ที่ลงท้ายด้วย /exec</span>' +
+        '<input id="sheetUrl" type="url" style="width:190px" placeholder="https://script.google.com/.../exec">' +
+        '<button type="button" id="sheetSave">บันทึก</button>' +
+        '<button type="button" id="sheetClear">เลิกใช้ชีต</button>' +
+        '<button type="button" id="sheetCancel">ยกเลิก</button>';
+      document.getElementById("sheetUrl").value = SHEET || "";
+      document.getElementById("sheetSave").addEventListener("click", function(){
+        var u = document.getElementById("sheetUrl").value.trim();
+        if(u.indexOf("http")!==0){ toast("URL ไม่ถูกต้อง"); return; }
+        SHEET = u; try{ localStorage.setItem(SHEET_KEY, u); }catch(e){}
+        renderModeBar(); startSheet();
+      });
+      document.getElementById("sheetClear").addEventListener("click", function(){
+        SHEET = null; try{ localStorage.removeItem(SHEET_KEY); }catch(e){}
+        setStatus(false, "บันทึกในเครื่องนี้"); renderModeBar();
+      });
+      document.getElementById("sheetCancel").addEventListener("click", renderModeBar);
+    });
+    if(SHEET) document.getElementById("sheetLink").addEventListener("click", function(){
+      var link = location.origin + location.pathname + "?sheet=" + encodeURIComponent(SHEET);
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        navigator.clipboard.writeText(link).then(function(){ toast("คัดลอกลิงก์แล้ว"); },
+          function(){ window.prompt("คัดลอกลิงก์นี้ไปให้นักศึกษา", link); });
+      } else window.prompt("คัดลอกลิงก์นี้ไปให้นักศึกษา", link);
+    });
+  } else {
+    bar.innerHTML = '<span>โหมดเก็บข้อมูล แสดงเฉพาะผลการสุ่ม</span>' +
+                    '<button type="button" id="modeIn">โหมดผู้สอน</button>';
+    document.getElementById("modeIn").addEventListener("click", function(){
+      bar.innerHTML = '<span>ใส่รหัสผู้สอน</span><input id="modeCode" type="password" ' +
+                      'autocomplete="off" placeholder="รหัส"><button type="button" id="modeGo">เข้าสู่โหมด</button>' +
+                      '<button type="button" id="modeCancel">ยกเลิก</button>';
+      var go = function(){
+        if(document.getElementById("modeCode").value.trim() === TEACHER_CODE){
+          state.mode = "teacher"; applyMode(); renderAll();
+        } else toast("รหัสไม่ถูกต้อง");
+      };
+      document.getElementById("modeGo").addEventListener("click", go);
+      document.getElementById("modeCode").addEventListener("keydown", function(e){ if(e.key==="Enter") go(); });
+      document.getElementById("modeCancel").addEventListener("click", renderModeBar);
+      document.getElementById("modeCode").focus();
+    });
+  }
+}
+function loadLocal(){
+  try{ var md = localStorage.getItem(MODE_KEY); if(md==="teacher"||md==="collect") state.mode = md; }catch(e){}
+  try{ var raw = localStorage.getItem(LS); if(raw){
+    var o = JSON.parse(raw);
+    for(var k=1;k<=5;k++) if(Array.isArray(o[k])) state.runs[k] = o[k];
+  } }catch(e){}
+}
+function saveLocal(){ try{ localStorage.setItem(LS, JSON.stringify(state.runs)); }catch(e){} }
+
+function persist(gid, op){
+  saveLocal();
+  if(SHEET){
+    var runs = state.runs[gid];
+    if(op && op.add && op.add.length){
+      var t = truthFor(gid);
+      sheetCall({action:"add", group:gid, draws: op.add.map(function(d, k){
+        return {seq: runs.length - op.add.length + k + 1, cell: d.c, surface: HAB_NAME[t.grid[d.i]],
+                mode: d.m, rows: sheetRows(gid, d.i)};
+      })});
+    } else if(op && op.undo) sheetCall({action:"undo", group:gid, seq: runs.length + 1});
+    else if(op && op.reset) sheetCall({action:"reset", group:gid});
+    return;
+  }
+  if(!db) return;
+  pending[gid] = (pending[gid]||0) + 1;
+  db.doc("runs/g"+gid).set({ cells: state.runs[gid].map(function(d){return d.c;}),
+                             modes: state.runs[gid].map(function(d){return d.m;}),
+                             updatedAt: Date.now() })
+    .catch(function(){ setStatus(false, "บันทึกในเครื่องนี้เท่านั้น"); })
+    .then(function(){ pending[gid] = Math.max(0,(pending[gid]||1)-1); });
+}
+function setStatus(shared, msg){
+  var el = document.getElementById("status");
+  el.className = "status" + (shared?"":" local");
+  el.lastElementChild.textContent = msg;
+}
+function applyRemote(gid, cells, modes){
+  if(!SHEET && pending[gid]) return;
+  var arr = [];
+  for(var i=0;i<cells.length;i++){
+    var ci = COLS.indexOf(String(cells[i]).charAt(0))*ROWS + (parseInt(String(cells[i]).slice(1),10)-1);
+    if(ci>=0 && ci<NCELL) arr.push({c:cells[i], i:ci, m:(modes&&modes[i])||"สุ่ม"});
+  }
+  state.runs[gid] = arr;
+  saveLocal();
+}
+
+/* ============ 4. สรุปผลจากแปลงที่เก็บ ============ */
+/* gid เป็นเลขกลุ่ม หรือ "all" เพื่อรวมแปลงของทั้ง 5 กลุ่มเข้าด้วยกัน */
+function recsOf(gid, filt){
+  var gs = (gid==="all") ? [1,2,3,4,5] : [gid], out = [];
+  gs.forEach(function(g){
+    var t = truthFor(g), set = (!filt || filt==="all") ? null : STRATA[filt].set;
+    state.runs[g].forEach(function(d){
+      if(!set || set.indexOf(t.grid[d.i]) >= 0) out.push({g:g, i:d.i});
+    });
+  });
+  return out;
+}
+function groupsWithData(filt){
+  var n = 0;
+  for(var g=1; g<=5; g++) if(recsOf(g, filt).length) n++;
+  return n;
+}
+function summarize(gid, filt){
+  var recs = recsOf(gid, filt);
+  var abund = new Float64Array(NSP), freq = new Int32Array(NSP), N = 0;
+  recs.forEach(function(d){
+    var t = truthFor(d.g);
+    for(var s=0;s<NSP;s++){ var c = t.counts[s][d.i]; if(c>0){ abund[s]+=c; freq[s]++; N+=c; } }
+  });
+  var S=0,f1=0,f2=0,H=0,D=0;
+  for(var s=0;s<NSP;s++){
+    var a = abund[s]; if(a<=0) continue;
+    S++; if(a===1) f1++; else if(a===2) f2++;
+    var p = a/N; H -= p*Math.log(p); D += p*p;
+  }
+  var chao = S + (f1*(f1-1))/(2*(f2+1));
+  return {S:S, N:N, abund:abund, freq:freq, f1:f1, f2:f2, chao:chao,
+          H:H, simpson: N>0?1-D:0, J: S>1 ? H/Math.log(S) : 0};
+}
+function popcount(x){ x=x-((x>>1)&0x55555555); x=(x&0x33333333)+((x>>2)&0x33333333);
+  x=(x+(x>>4))&0x0f0f0f0f; return (x*0x01010101)>>24; }
+
+function rarefy(gid, perms, filt){
+  var recs = recsOf(gid, filt), n = recs.length;
+  if(n===0) return null;
+  var bits = recs.map(function(d){ return truthFor(d.g).bits[d.i]; });
+  perms = perms || 200;
+  var all = [];
+  var rng = mulberry32(99 + (gid==="all" ? 61 : gid*7) + n);
+  for(var p=0;p<perms;p++){
+    var ord = []; for(var i=0;i<n;i++) ord.push(i);
+    for(var j=n-1;j>0;j--){ var k=Math.floor(rng()*(j+1)); var tmp=ord[j]; ord[j]=ord[k]; ord[k]=tmp; }
+    var acc = new Uint32Array(WORDS), row = new Float64Array(n);
+    for(var q=0;q<n;q++){
+      var b = bits[ord[q]], c = 0;
+      for(var w=0;w<WORDS;w++){ acc[w] |= b[w]; c += popcount(acc[w]); }
+      row[q] = c;
+    }
+    all.push(row);
+  }
+  var mean = [], lo = [], hi = [];
+  var col = new Float64Array(perms);
+  for(var q2=0;q2<n;q2++){
+    var s=0; for(var p2=0;p2<perms;p2++){ col[p2]=all[p2][q2]; s+=col[p2]; }
+    var sorted = Array.prototype.slice.call(col).sort(function(a,b){return a-b;});
+    mean.push(s/perms);
+    lo.push(sorted[Math.floor(0.025*perms)]);
+    hi.push(sorted[Math.min(perms-1, Math.floor(0.975*perms))]);
+  }
+  // เส้นตามลำดับที่เก็บจริง
+  var acc2 = new Uint32Array(WORDS), obs = [];
+  for(var o=0;o<n;o++){ var bb = bits[o], cc = 0;
+    for(var w2=0;w2<WORDS;w2++){ acc2[w2] |= bb[w2]; cc += popcount(acc2[w2]); } obs.push(cc); }
+  return {n:n, mean:mean, lo:lo, hi:hi, obs:obs};
+}
+
+/* ============ 5. วาดแผนที่ ============ */
+var canvas = document.getElementById("map"), ctx = canvas.getContext("2d");
+var mapGeom = {pad:20, cw:0, ch:0};
+function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+function drawMap(){
+  var W = Math.round(canvas.getBoundingClientRect().width || canvas.parentElement.clientWidth);
+  if(W < 120) return;
+  var pad = 20;
+  var cw = (W - pad) / NC, ch = cw;
+  var H = pad + ch*ROWS;
+  var dpr = window.devicePixelRatio || 1;
+  canvas.width = Math.round(W*dpr); canvas.height = Math.round(H*dpr);
+  canvas.style.height = H + "px";
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  mapGeom = {pad:pad, cw:cw, ch:ch};
+  ctx.clearRect(0,0,W,H);
+  var t = truthFor(state.gid);
+  var cols = [cssVar("--veg"), cssVar("--soil"), cssVar("--road")];
+  var line = cssVar("--line"), ink2 = cssVar("--ink-2"), acc = cssVar("--accent"), dim = cssVar("--dim");
+  ctx.font = '500 11px "Bai Jamjuree", sans-serif';
+  ctx.textAlign = "center"; ctx.textBaseline = "middle";
+  for(var c=0;c<NC;c++) { ctx.fillStyle = ink2; ctx.fillText(COLS[c], pad + cw*(c+0.5), pad/2); }
+  ctx.textAlign = "right";
+  for(var r=0;r<ROWS;r++){ ctx.fillStyle = ink2; ctx.fillText(String(r+1), pad-5, pad + ch*(r+0.5)); }
+  var sampled = {}; state.runs[state.gid].forEach(function(d,k){ sampled[d.i] = k+1; });
+  var lastI = state.runs[state.gid].length ? state.runs[state.gid][state.runs[state.gid].length-1].i : -1;
+  ctx.textAlign = "center";
+  for(var ci=0; ci<NC; ci++) for(var ri=0; ri<ROWS; ri++){
+    var i = idx(ci,ri), x = pad + cw*ci, y = pad + ch*ri;
+    ctx.fillStyle = cols[t.grid[i]];
+    ctx.fillRect(x, y, cw, ch);
+    if(!inFrame(t.grid[i])){ ctx.fillStyle = dim; ctx.fillRect(x, y, cw, ch); }
+    ctx.strokeStyle = line; ctx.lineWidth = 0.5;
+    ctx.strokeRect(x+0.25, y+0.25, cw-0.5, ch-0.5);
+    if(sampled[i]){
+      ctx.fillStyle = inFrame(t.grid[i]) ? "rgba(255,255,255,.88)" : "rgba(255,255,255,.55)";
+      ctx.fillRect(x+1, y+1, cw-2, ch-2);
+      ctx.fillStyle = "#15231C";
+      ctx.font = '600 ' + Math.max(9, Math.min(13, cw*0.42)) + 'px "Bai Jamjuree", sans-serif';
+      ctx.fillText(String(sampled[i]), x+cw/2, y+ch/2+0.5);
+      if(i===lastI){ ctx.strokeStyle = acc; ctx.lineWidth = 2.5;
+        ctx.strokeRect(x+1.5, y+1.5, cw-3, ch-3); }
+    }
+  }
+}
+canvas.addEventListener("click", function(e){
+  var rect = canvas.getBoundingClientRect();
+  var x = e.clientX - rect.left - mapGeom.pad, y = e.clientY - rect.top - mapGeom.pad;
+  if(x<0 || y<0) return;
+  var ci = Math.floor(x/mapGeom.cw), ri = Math.floor(y/mapGeom.ch);
+  if(ci<0||ci>=NC||ri<0||ri>=ROWS) return;
+  takeCell(idx(ci,ri), "เลือกเอง");
+});
+
+/* ============ 6. การเก็บแปลง ============ */
+function taken(){ var m = {}; state.runs[state.gid].forEach(function(d){ m[d.i]=1; }); return m; }
+function takeCell(i, mode){
+  var m = taken();
+  if(m[i]){ toast("ช่อง " + cellName(i) + " เก็บไปแล้ว"); return; }
+  var rec = {c:cellName(i), i:i, m:mode};
+  state.runs[state.gid].push(rec);
+  persist(state.gid, {add:[rec]});
+  renderAll();
+  if(mode==="เลือกเอง") toast("เลือกเอง ไม่ใช่การสุ่ม จดไว้ในคอลัมน์วิธีแล้ว");
+}
+function frameCells(){
+  var t = truthFor(state.gid), out = [];
+  for(var i=0;i<NCELL;i++) if(inFrame(t.grid[i])) out.push(i);
+  return out;
+}
+function drawRandom(k){
+  var m = taken(), st = activeStratum(), free = frameCells().filter(function(i){ return !m[i]; });
+  if(!free.length){
+    toast(st==="all" ? "เก็บครบทั้ง 150 แปลงแล้ว"
+                     : "เก็บครบทุกแปลง" + STRATA[st].label + "แล้ว เลือกพื้นผิวอื่นเพื่อสุ่มต่อ");
+    return;
+  }
+  var mode = st==="all" ? "สุ่ม" : "สุ่ม (" + STRATA[st].label + ")";
+  k = Math.min(k, free.length);
+  var added = [];
+  for(var j=0;j<k;j++){
+    var pk = free.splice(Math.floor(Math.random()*free.length), 1)[0];
+    var rec2 = {c:cellName(pk), i:pk, m:mode};
+    state.runs[state.gid].push(rec2); added.push(rec2);
+  }
+  persist(state.gid, {add:added}); renderAll();
+}
+
+/* ============ 7. กราฟ SVG ============ */
+function esc(s){ return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;"); }
+function chartWidth(el){
+  var w = el && el.clientWidth ? el.clientWidth : 0;
+  if(!w) w = Math.min(680, (document.querySelector(".wrap").clientWidth || 360) - 30);
+  return Math.max(280, Math.min(760, w));
+}
+function lineChart(opts){
+  var W = opts.W || 480;
+  var H = Math.round(Math.max(250, Math.min(430, W*0.82)));
+  var L = 42, R = 12, T = 12, B = 40;
+  var FS = W < 420 ? 12 : 13;
+  var ink = "var(--ink)", ink2 = "var(--ink-2)", grid = "var(--line-soft)";
+  var xmax = opts.xmax || 1, ymax = opts.ymax || 1;
+  var px = function(v){ return L + (W-L-R) * (v/xmax); };
+  var py = function(v){ return H-B - (H-T-B) * (v/ymax); };
+  var s = '<svg class="chart" viewBox="0 0 '+W+' '+H+'" role="img" aria-label="'+esc(opts.aria||"กราฟ")+'">';
+  var yt = ticks(0, ymax, 5), xt = ticks(0, xmax, 5);
+  yt.forEach(function(v){
+    s += '<line x1="'+L+'" y1="'+py(v)+'" x2="'+(W-R)+'" y2="'+py(v)+'" stroke="'+grid+'" stroke-width="1"/>';
+    s += '<text x="'+(L-8)+'" y="'+(py(v)+5)+'" text-anchor="end" font-size="'+FS+'" fill="'+ink2+'">'+fmt(v)+'</text>';
+  });
+  xt.forEach(function(v){
+    s += '<text x="'+px(v)+'" y="'+(H-B+22)+'" text-anchor="middle" font-size="'+FS+'" fill="'+ink2+'">'+fmt(v)+'</text>';
+  });
+  s += '<line x1="'+L+'" y1="'+(H-B)+'" x2="'+(W-R)+'" y2="'+(H-B)+'" stroke="var(--line)" stroke-width="1.5"/>';
+  (opts.bands||[]).forEach(function(b){
+    var d = "";
+    for(var i=0;i<b.x.length;i++) d += (i?"L":"M") + px(b.x[i]) + " " + py(b.hi[i]) + " ";
+    for(var j=b.x.length-1;j>=0;j--) d += "L" + px(b.x[j]) + " " + py(b.lo[j]) + " ";
+    s += '<path d="'+d+'Z" fill="'+b.color+'" opacity="'+(b.opacity||0.18)+'"/>';
+  });
+  (opts.series||[]).forEach(function(ser){
+    var d = "";
+    for(var i=0;i<ser.x.length;i++) d += (i?"L":"M") + px(ser.x[i]) + " " + py(ser.y[i]) + " ";
+    s += '<path d="'+d+'" fill="none" stroke="'+ser.color+'" stroke-width="'+(ser.w||2.5)+'" '+
+         (ser.dash?'stroke-dasharray="7 6" ':'')+'stroke-linejoin="round" stroke-linecap="round"/>';
+    if(ser.dots) for(var k=0;k<ser.x.length;k++)
+      s += '<circle cx="'+px(ser.x[k])+'" cy="'+py(ser.y[k])+'" r="3.4" fill="'+ser.color+'"/>';
+  });
+  (opts.hlines||[]).forEach(function(h){
+    s += '<line x1="'+L+'" y1="'+py(h.y)+'" x2="'+(W-R)+'" y2="'+py(h.y)+'" stroke="'+h.color+
+         '" stroke-width="1.6" stroke-dasharray="5 5"/>';
+    s += '<text x="'+(W-R)+'" y="'+(py(h.y)-8)+'" text-anchor="end" font-size="'+FS+'" fill="'+h.color+'">'+esc(h.label)+'</text>';
+  });
+  s += '<text x="'+((L+W-R)/2)+'" y="'+(H-4)+'" text-anchor="middle" font-size="'+FS+'" fill="'+ink2+'">'+esc(opts.xlab||"")+'</text>';
+  s += '<text transform="translate(11,'+((T+H-B)/2)+') rotate(-90)" text-anchor="middle" font-size="'+FS+'" fill="'+ink2+'">'+esc(opts.ylab||"")+'</text>';
+  s += '</svg>';
+  if(opts.legend && opts.legend.length){
+    s += '<div class="legend">' + opts.legend.map(function(l){
+      return '<span><i style="background:'+l.color+'"></i>'+esc(l.label)+'</span>'; }).join("") + '</div>';
+  }
+  return s;
+}
+function ticks(min, max, n){
+  var step = niceStep((max-min)/n), out = [];
+  for(var v=0; v<=max+1e-9; v+=step) out.push(Math.round(v*100)/100);
+  return out;
+}
+function niceStep(raw){
+  var mag = Math.pow(10, Math.floor(Math.log(Math.max(raw,1e-9))/Math.LN10));
+  var n = raw/mag;
+  return (n<=1?1:n<=2?2:n<=5?5:10)*mag;
+}
+function fmt(v){ return (Math.abs(v)>=1000) ? Math.round(v/100)/10+"k" : (Math.round(v*10)/10); }
+
+var GCOL = ["#1668C9","#C1622F","#2F6B4B","#7C4FA1","#B0912A"];
+
+var DB_TOTAL = {all:112, soil:107, veg:107, bare:107, road:17};
+function renderCurve(){
+  var f = state.curveFilter, pooled = (state.scope==="pooled");
+  var who = pooled ? "all" : state.gid;
+  var r = rarefy(who, 200, f), sum = summarize(who, f);
+  var nf = recsOf(who, f).length;
+  var pi = document.getElementById("poolInfo");
+  if(pooled){
+    var ng = groupsWithData(f);
+    var ref = (f==="all" || f==="soil" || f==="road") ? DB_TOTAL[f] : null;
+    pi.hidden = false;
+    pi.textContent = "รวมแปลงจาก " + ng + " กลุ่ม เป็น " + nf + " แปลง (" + (nf*CELL_AREA) + " ตร.ม.) " +
+      (ref ? "พบแล้ว " + sum.S + " จาก " + ref + " ชนิดในฐานข้อมูล คิดเป็น " + Math.round(100*sum.S/ref) + "%" : "");
+  } else pi.hidden = true;
+  var box = document.getElementById("sacBox");
+  if(!r || r.n < 2){ box.innerHTML = '<p class="empty">' + (f==="all" ? "เก็บอย่างน้อย 2 แปลงเพื่อดูเส้นโค้ง"
+      : "ยังมีแปลง" + STRATA[f].label + "ไม่ถึง 2 แปลง") + '</p>'; }
+  else{
+    var xs = [], k = state.xMode==="a" ? CELL_AREA : 1;
+    for(var i=0;i<r.n;i++) xs.push((i+1)*k);
+    var ymax = Math.max(sum.chao, Math.max.apply(null, r.hi)) * 1.12;
+    box.innerHTML = lineChart({
+      W: chartWidth(box),
+      xmax: r.n*k, ymax: ymax,
+      xlab: state.xMode==="a" ? "พื้นที่สำรวจสะสม (ตารางเมตร)" : "จำนวนแปลงสำรวจ",
+      ylab: "จำนวนชนิดสะสม",
+      aria: "เส้นโค้งสะสมชนิด",
+      bands: [{x:xs, lo:r.lo, hi:r.hi, color:"var(--accent)", opacity:0.16}],
+      series: [
+        {x:xs, y:r.mean, color:"var(--accent)", w:3},
+        {x:xs, y:r.obs, color:"var(--ink-2)", w:1.6, dash:true, dots:r.n<=40}
+      ],
+      hlines: sum.chao>0 ? [{y:sum.chao, color:"var(--warn)", label:"Chao1 ≈ "+sum.chao.toFixed(1)}] : [],
+      legend: [
+        {color:"var(--accent)", label:"ค่าเฉลี่ย 200 ลำดับ (95% CI)"},
+        {color:"var(--ink-2)", label:"ลำดับที่เก็บจริง"},
+        {color:"var(--warn)", label:"จำนวนชนิดที่คาดว่ามีทั้งหมด"}
+      ]
+    });
+  }
+  // rank abundance
+  var rb = document.getElementById("rankBox");
+  var ab = [];
+  for(var s2=0;s2<NSP;s2++) if(sum.abund[s2]>0) ab.push(sum.abund[s2]);
+  ab.sort(function(a,b){return b-a;});
+  if(ab.length<2) rb.innerHTML = '<p class="empty">ยังมีข้อมูลไม่พอ</p>';
+  else{
+    var ly = ab.map(function(v){ return Math.log10(v); });
+    var ymax2 = Math.max.apply(null, ly)+0.25;
+    rb.innerHTML = lineChart({
+      W: chartWidth(rb),
+      xmax: ab.length, ymax: ymax2,
+      xlab:"ลำดับชนิด เรียงจากชุกชุมมากไปน้อย", ylab:"log₁₀ จำนวนตัว",
+      aria:"กราฟความชุกชุมเรียงลำดับ",
+      series:[{x:ab.map(function(_,i){return i+1;}), y:ly, color:"var(--veg)", w:2.4, dots:ab.length<=40}]
+    });
+  }
+  // comparison
+  var cb = document.getElementById("cmpBox"), series = [], legend = [], maxN = 0, maxS = 0;
+  for(var g=1; g<=5; g++){
+    if(recsOf(g, f).length < 2) continue;
+    var rr = rarefy(g, 80, f);
+    if(!rr) continue;
+    var xs2 = []; for(var q=0;q<rr.n;q++) xs2.push(q+1);
+    series.push({x:xs2, y:rr.mean, color:GCOL[g-1], w:2.4});
+    legend.push({color:GCOL[g-1], label:"กลุ่มที่ "+g+" ("+rr.n+" แปลง)"});
+    maxN = Math.max(maxN, rr.n); maxS = Math.max(maxS, rr.mean[rr.n-1]);
+  }
+  if(series.length>=2){
+    var rp = rarefy("all", 80, f);
+    if(rp){
+      var xp = []; for(var qq=0; qq<rp.n; qq++) xp.push(qq+1);
+      series.push({x:xp, y:rp.mean, color:"var(--ink)", w:3.2});
+      legend.push({color:"var(--ink)", label:"รวมทุกกลุ่ม ("+rp.n+" แปลง)"});
+      maxN = Math.max(maxN, rp.n); maxS = Math.max(maxS, rp.mean[rp.n-1]);
+    }
+  }
+  if(series.length<2) cb.innerHTML = '<p class="empty">ต้องมีอย่างน้อย 2 กลุ่มที่เก็บข้อมูลแล้ว</p>';
+  else cb.innerHTML = lineChart({ W: chartWidth(cb), xmax:maxN, ymax:maxS*1.12, xlab:"จำนวนแปลงสำรวจ", ylab:"จำนวนชนิดสะสม",
+        aria:"เปรียบเทียบเส้นโค้งระหว่างกลุ่ม", series:series, legend:legend });
+
+  document.getElementById("mS").textContent = sum.S;
+  document.getElementById("mChao").textContent = sum.S ? sum.chao.toFixed(1) : "0";
+  document.getElementById("mComp").textContent = sum.chao>0 ? Math.round(100*sum.S/sum.chao)+"%" : "–";
+  document.getElementById("mH").textContent = sum.H.toFixed(2);
+  document.getElementById("mD").textContent = sum.simpson.toFixed(3);
+  document.getElementById("mJ").textContent = sum.J.toFixed(2);
+  document.getElementById("curveHint").textContent =
+    (pooled ? "รวมทุกกลุ่ม " : "") + (f==="all" ? "จาก " : "เฉพาะแปลง" + STRATA[f].label + " ") + nf + " แปลง (" + (nf*CELL_AREA) +
+    " ตร.ม.) ชนิดที่พบเพียงตัวเดียว " + sum.f1 + " ชนิด พบสองตัว " + sum.f2 + " ชนิด";
+}
+
+/* ============ 8. ตารางข้อมูล ============ */
+function renderTables(){
+  var sum = summarize(state.gid), runs = state.runs[state.gid], t = truthFor(state.gid);
+  var rows = [];
+  for(var s=0;s<NSP;s++) if(sum.abund[s]>0) rows.push({s:s, n:sum.abund[s], f:sum.freq[s]});
+  rows.sort(function(a,b){ return b.n-a.n || b.f-a.f; });
+  var tb = document.querySelector("#spTable tbody");
+  tb.innerHTML = rows.map(function(r){
+    var sp = POOL[r.s];
+    return '<tr><td>'+esc(sp.name)+'<div class="note">'+esc(sp.aff.label)+'</div></td><td>'+esc(sp.taxon)+
+           '</td><td class="n">'+r.n+'</td><td class="n">'+r.f+'</td></tr>';
+  }).join("") || '<tr><td colspan="4" class="empty">ยังไม่มีข้อมูล</td></tr>';
+  document.getElementById("spHint").textContent = rows.length + " ชนิดจากบัญชี " + NSP + " ชนิด เรียงตามจำนวนตัวรวม";
+
+  var qb = document.querySelector("#qTable tbody"), qh = document.getElementById("qHead");
+  if(state.mode==="teacher"){
+    qh.innerHTML = '<tr><th class="n">ลำดับ</th><th>ช่อง</th><th>พื้นผิว</th><th class="n">ชนิด</th><th class="n">จำนวนตัว</th><th>วิธี</th></tr>';
+    document.getElementById("qHint").textContent = "สรุปรายแปลงของกลุ่มที่ " + state.gid;
+    qb.innerHTML = runs.map(function(d,k){
+      var q = quadratOf(state.gid, d.i);
+      return '<tr><td class="n">'+(k+1)+'</td><td>'+esc(d.c)+'</td><td>'+HAB_NAME[q.habitat]+
+             '</td><td class="n">'+q.S+'</td><td class="n">'+q.N+'</td><td>'+esc(d.m)+'</td></tr>';
+    }).join("") || '<tr><td colspan="6" class="empty">ยังไม่มีข้อมูล</td></tr>';
+  } else {
+    qh.innerHTML = '<tr><th class="n">แปลง</th><th>ช่อง</th><th>พื้นผิว</th><th>ชนิดที่พบ</th><th class="n">จำนวน</th></tr>';
+    document.getElementById("qHint").textContent = "ข้อมูลดิบทุกแปลงของกลุ่มที่ " + state.gid + " ลอกลงใบกิจกรรมได้เลย";
+    var html = "";
+    runs.forEach(function(d,k){
+      var q = quadratOf(state.gid, d.i), first = true;
+      if(!q.sp.length){
+        html += '<tr class="qsep"><td class="n">'+(k+1)+'</td><td>'+esc(d.c)+'</td><td>'+HAB_NAME[q.habitat]+
+                '</td><td class="sub">ไม่พบสิ่งมีชีวิต</td><td class="n">0</td></tr>';
+        return;
+      }
+      q.sp.forEach(function(x){
+        html += '<tr'+(first?' class="qsep"':'')+'><td class="n">'+(first?(k+1):"")+'</td><td>'+(first?esc(d.c):"")+
+                '</td><td'+(first?'':' class="sub"')+'>'+(first?HAB_NAME[q.habitat]:"")+'</td><td>'+esc(POOL[x.s].name)+
+                '</td><td class="n">'+x.n+'</td></tr>';
+        first = false;
+      });
+    });
+    qb.innerHTML = html || '<tr><td colspan="5" class="empty">ยังไม่มีข้อมูล</td></tr>';
+  }
+}
+
+/* ============ 9. ส่งออก CSV ============ */
+function q(v){ return '"' + String(v).replace(/"/g,'""') + '"'; }
+function row(a){ return a.map(q).join(","); }
+var ENV_HEAD = ["อุณหภูมิอากาศ(C)","อุณหภูมิผิวพื้น(C)","ความชื้นสัมพัทธ์(%)","เรือนยอดปกคลุม(%)",
+                "ระดับการรบกวน(1-5)","ร่องรอยการรบกวน","ลักษณะพื้นที่"];
+function envCols(gid,i){
+  var e = envOf(gid,i);
+  return [e.tAir, e.tSurf, e.rh, e.canopy, e.dLevel, e.evidence.join(" / "), e.desc];
+}
+function csvLong(){
+  var S = SESSION;
+  var out = [row(["กลุ่ม","ลำดับแปลง","ช่อง","พื้นผิว","วิธีเลือก","เวลาสำรวจ","สภาพอากาศ"]
+              .concat(ENV_HEAD).concat(["รหัสชนิด","ชื่อชนิด","กลุ่มสิ่งมีชีวิต","จำนวนตัว"]))];
+  state.runs[state.gid].forEach(function(d,k){
+    var qd = quadratOf(state.gid, d.i);
+    var head = [state.gid,k+1,d.c,HAB_NAME[qd.habitat],d.m,S.time,S.sky+" "+S.wind].concat(envCols(state.gid,d.i));
+    if(!qd.sp.length) out.push(row(head.concat(["","ไม่พบชนิดใด","",0])));
+    qd.sp.forEach(function(x){
+      var sp = POOL[x.s];
+      out.push(row(head.concat([sp.code, sp.name, sp.taxon, x.n])));
+    });
+  });
+  return out.join("\n");
+}
+function csvMatrix(){
+  var sum = summarize(state.gid), cols = [];
+  for(var s=0;s<NSP;s++) if(sum.abund[s]>0) cols.push(s);
+  var out = [row(["แปลง","ช่อง","พื้นผิว"].concat(ENV_HEAD).concat(cols.map(function(s){ return POOL[s].code; })))];
+  state.runs[state.gid].forEach(function(d,k){
+    var t = truthFor(state.gid), line = [k+1, d.c, HAB_NAME[t.grid[d.i]]].concat(envCols(state.gid, d.i));
+    cols.forEach(function(s){ line.push(t.counts[s][d.i]); });
+    out.push(row(line));
+  });
+  return out.join("\n");
+}
+function save(name, text){
+  if(downloads){
+    downloads.save({filename:name, data:"\ufeff"+text}).catch(function(err){
+      toast(err && err.code==="declined" ? "ยกเลิกการดาวน์โหลดแล้ว" : "ดาวน์โหลดไม่สำเร็จ");
+    });
+    return;
+  }
+  // เปิดจากเว็บไซต์ทั่วไป ใช้วิธีดาวน์โหลดมาตรฐานของเบราว์เซอร์
+  try{
+    var blob = new Blob(["\ufeff"+text], {type:"text/csv;charset=utf-8"});
+    var url = URL.createObjectURL(blob), a = document.createElement("a");
+    a.href = url; a.download = name; document.body.appendChild(a); a.click();
+    setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(url); }, 1200);
+  }catch(e){ toast("เบราว์เซอร์นี้ดาวน์โหลดไฟล์ไม่ได้ ใช้วิธีคัดลอกจากตารางแทน"); }
+}
+
+/* ============ 10. เชื่อมทุกอย่างเข้าด้วยกัน ============ */
+function toast(msg){
+  var el = document.getElementById("toast");
+  el.textContent = msg; el.classList.add("show");
+  clearTimeout(toast._t); toast._t = setTimeout(function(){ el.classList.remove("show"); }, 2400);
+}
+function renderChips(){
+  var box = document.getElementById("chips");
+  box.innerHTML = "";
+  for(var g=1; g<=5; g++){
+    var b = document.createElement("button");
+    b.className = "chip"; b.type = "button";
+    b.setAttribute("aria-pressed", g===state.gid ? "true" : "false");
+    b.setAttribute("data-has", state.runs[g].length ? "1" : "0");
+    b.innerHTML = '<span class="dot"></span>กลุ่มที่ ' + g +
+      (state.runs[g].length ? ' <span style="opacity:.75">'+state.runs[g].length+'</span>' : '');
+    (function(gg){ b.addEventListener("click", function(){ state.gid = gg; renderAll(); }); })(g);
+    box.appendChild(b);
+  }
+}
+function renderHead(){
+  var runs = state.runs[state.gid], sum = summarize(state.gid);
+  document.getElementById("mapTitle").textContent = "แผนที่กลุ่มที่ " + state.gid;
+  document.getElementById("sQ").textContent = runs.length;
+  document.getElementById("sA").textContent = runs.length*CELL_AREA;
+  document.getElementById("sS").textContent = sum.S;
+  document.getElementById("sN").textContent = sum.N;
+  document.getElementById("btnUndo").disabled = !runs.length;
+  document.getElementById("btnReset").disabled = !runs.length;
+  var st = activeStratum(), cells = frameCells(), m = taken(), left = 0;
+  cells.forEach(function(i){ if(!m[i]) left++; });
+  document.getElementById("btnDraw").disabled = left===0;
+  document.getElementById("btnDraw5").disabled = left===0;
+  document.getElementById("btnDraw").textContent = left===0 ? "เก็บครบทุกแปลงของพื้นผิวนี้แล้ว" : STRATA[st].draw;
+  document.getElementById("btnDraw5").textContent = STRATA[st].draw5;
+  document.getElementById("frameInfo").textContent =
+    "กรอบการสุ่มตอนนี้: " + STRATA[st].label + " " + cells.length + " แปลง เก็บแล้ว " +
+    (cells.length-left) + " เหลือ " + left + " แปลง" +
+    (st==="all" ? "" : " การเก็บแบบแยกพื้นผิวคือ stratified sampling ควรบันทึกแยกชั้นตอนวิเคราะห์");
+  document.getElementById("soilPills").hidden = (state.stratum !== "soil");
+  Array.prototype.forEach.call(document.querySelectorAll("#stratumPills .pill"), function(b){
+    b.setAttribute("aria-pressed", b.getAttribute("data-st")===state.stratum ? "true":"false"); });
+  Array.prototype.forEach.call(document.querySelectorAll("#soilPills .pill"), function(b){
+    b.setAttribute("aria-pressed", b.getAttribute("data-sub")===state.soilSub ? "true":"false"); });
+}
+function renderLast(){
+  var runs = state.runs[state.gid], body = document.getElementById("lastBody");
+  if(!runs.length){ body.innerHTML = '<p class="empty">ยังไม่ได้เก็บแปลง กดปุ่ม “สุ่ม 1 แปลง” เพื่อเริ่ม</p>'; return; }
+  var d = runs[runs.length-1], q = quadratOf(state.gid, d.i), e = envOf(state.gid, d.i);
+  var html = '<div class="quadrat"><div class="qhead"><span class="cell">'+esc(d.c)+'</span>'+
+    '<span class="meta">'+HAB_NAME[q.habitat]+' · แปลงที่ '+runs.length+' · '+d.m+'</span>'+
+    (state.mode==="teacher" ? '<span class="meta" style="margin-left:auto">'+q.S+' ชนิด · '+q.N+' ตัว</span>' : '') +
+    '</div>' + envHTML(e) + '<ul class="splist">';
+  if(!q.sp.length) html += '<li><span>ไม่พบสิ่งมีชีวิตในแปลงนี้</span></li>';
+  q.sp.forEach(function(x){
+    html += '<li><span>'+esc(POOL[x.s].name)+' <span class="tag">'+esc(POOL[x.s].code)+'</span></span><span class="n">'+x.n+'</span></li>';
+  });
+  html += '</ul></div>';
+  body.innerHTML = html;
+}
+function envHTML(e){
+  return '<div class="env"><p>' + esc(e.desc) + ' การรบกวนจากมนุษย์อยู่ในระดับ' + e.dLabel + ' ' +
+    esc(e.evidence.join(" ")) + '</p><div class="envgrid">' +
+    '<div><b>' + e.tAir.toFixed(1) + ' °C</b><span>อุณหภูมิอากาศ</span></div>' +
+    '<div><b>' + e.tSurf.toFixed(1) + ' °C</b><span>อุณหภูมิผิวพื้น</span></div>' +
+    '<div><b>' + e.rh + ' %</b><span>ความชื้นสัมพัทธ์</span></div>' +
+    '<div><b>' + e.canopy + ' %</b><span>เรือนยอดปกคลุม</span></div>' +
+    '<div><b>' + e.dLevel + '/5</b><span>ระดับการรบกวน</span></div></div></div>';
+}
+function renderSession(){
+  var S = SESSION;
+  document.getElementById("sessTitle").textContent = "สภาพอากาศขณะออกสำรวจ";
+  document.getElementById("sessBody").textContent =
+    "ทั้งห้ากลุ่มออกสำรวจพร้อมกัน เวลา " + S.time + " " + S.sky + " " + S.wind +
+    " สถานีตรวจวัดกลางอ่านได้ " + S.base.toFixed(1) + " องศาเซลเซียส ความชื้นสัมพัทธ์ " + S.rh +
+    " เปอร์เซ็นต์ ค่าที่วัดได้ในแต่ละแปลงจะต่างจากนี้ตามร่มเงาและพื้นผิวของแปลงนั้น";
+}
+function renderEnvList(){
+  var runs = state.runs[state.gid], box = document.getElementById("envList");
+  document.getElementById("envHint").textContent =
+    runs.length ? "ทุกแปลงของกลุ่มที่ " + state.gid + " เรียงตามลำดับที่เก็บ" : "";
+  box.innerHTML = runs.map(function(d,k){
+    var e = envOf(state.gid, d.i), t = truthFor(state.gid);
+    return '<div class="envblock"><div class="eh"><b>แปลงที่ ' + (k+1) + ' · ' + esc(d.c) + '</b>' +
+      '<span>' + HAB_NAME[t.grid[d.i]] + '</span></div>' + envHTML(e) + '</div>';
+  }).join("") || '<p class="empty">ยังไม่มีข้อมูล</p>';
+}
+function renderAll(){
+  renderChips(); renderSession(); renderHead(); drawMap(); renderLast(); renderEnvList();
+  if(state.mode==="teacher") renderCurve();
+  renderTables();
+}
+
+document.getElementById("btnDraw").addEventListener("click", function(){ drawRandom(1); });
+document.getElementById("btnDraw5").addEventListener("click", function(){ drawRandom(5); });
+document.getElementById("btnUndo").addEventListener("click", function(){
+  if(!state.runs[state.gid].length) return;
+  state.runs[state.gid].pop(); persist(state.gid, {undo:true}); renderAll();
+});
+var resetArm = 0;
+document.getElementById("btnReset").addEventListener("click", function(){
+  var b = document.getElementById("btnReset");
+  if(!state.runs[state.gid].length) return;
+  if(!resetArm){
+    resetArm = 1; b.textContent = "กดอีกครั้งเพื่อยืนยันการล้างข้อมูล";
+    setTimeout(function(){ resetArm = 0; b.textContent = "ล้างข้อมูลกลุ่มนี้"; }, 4000);
+    return;
+  }
+  resetArm = 0; b.textContent = "ล้างข้อมูลกลุ่มนี้";
+  state.runs[state.gid] = []; persist(state.gid, {reset:true}); renderAll();
+});
+document.getElementById("btnCsvLong").addEventListener("click", function(){
+  if(!state.runs[state.gid].length) return toast("ยังไม่มีข้อมูลให้ส่งออก");
+  save("ข้อมูลรายชนิด-กลุ่ม"+state.gid+".csv", csvLong());
+});
+document.getElementById("btnCsvMat").addEventListener("click", function(){
+  if(!state.runs[state.gid].length) return toast("ยังไม่มีข้อมูลให้ส่งออก");
+  save("เมทริกซ์แปลงxชนิด-กลุ่ม"+state.gid+".csv", csvMatrix());
+});
+Array.prototype.forEach.call(document.querySelectorAll("#stratumPills .pill"), function(b){
+  b.addEventListener("click", function(){ state.stratum = b.getAttribute("data-st"); renderHead(); drawMap(); });
+});
+Array.prototype.forEach.call(document.querySelectorAll("#soilPills .pill"), function(b){
+  b.addEventListener("click", function(){ state.soilSub = b.getAttribute("data-sub"); renderHead(); drawMap(); });
+});
+Array.prototype.forEach.call(document.querySelectorAll("#segS button"), function(b){
+  b.addEventListener("click", function(){
+    state.scope = b.getAttribute("data-s");
+    Array.prototype.forEach.call(document.querySelectorAll("#segS button"), function(o){
+      o.setAttribute("aria-pressed", o===b ? "true" : "false"); });
+    renderCurve();
+  });
+});
+Array.prototype.forEach.call(document.querySelectorAll("#segF button"), function(b){
+  b.addEventListener("click", function(){
+    state.curveFilter = b.getAttribute("data-f");
+    Array.prototype.forEach.call(document.querySelectorAll("#segF button"), function(o){
+      o.setAttribute("aria-pressed", o===b ? "true" : "false"); });
+    renderCurve();
+  });
+});
+Array.prototype.forEach.call(document.querySelectorAll("#segX button"), function(b){
+  b.addEventListener("click", function(){
+    state.xMode = b.getAttribute("data-x");
+    Array.prototype.forEach.call(document.querySelectorAll("#segX button"), function(o){
+      o.setAttribute("aria-pressed", o===b ? "true" : "false"); });
+    renderCurve();
+  });
+});
+Array.prototype.forEach.call(document.querySelectorAll('[role="tab"]'), function(t){
+  t.addEventListener("click", function(){
+    Array.prototype.forEach.call(document.querySelectorAll('[role="tab"]'), function(o){
+      o.setAttribute("aria-selected", o===t ? "true":"false");
+      document.getElementById(o.getAttribute("aria-controls")).hidden = (o!==t);
+    });
+    if(t.id==="tab-sample") drawMap();
+  });
+});
+var rt; window.addEventListener("resize", function(){ clearTimeout(rt); rt = setTimeout(drawMap, 150); });
+
+loadLocal();
+initSheet();
+applyMode();
+renderAll();
+setStatus(false, "บันทึกในเครื่องนี้");
+
+document.getElementById("dlNote").textContent = "ไฟล์ CSV เข้ารหัส UTF-8 พร้อม BOM เปิดใน Excel ได้โดยตรง";
+if(SHEET) startSheet();
+
+if(!SHEET && window.claude && window.claude.use){
+  window.claude.use("db").then(function(d){
+    if(!d) return;
+    db = d;
+    setStatus(true, "ข้อมูลใช้ร่วมกันทุกเครื่องที่เปิดหน้านี้");
+    db.collection("runs").onSnapshot(function(snap){
+      snap.docs.forEach(function(doc){
+        var gid = parseInt(String(doc.id).replace("g",""),10);
+        if(!(gid>=1 && gid<=5)) return;
+        var data = doc.data() || {};
+        if(Array.isArray(data.cells)) applyRemote(gid, data.cells, data.modes);
+      });
+      renderAll();
+    }, function(){ setStatus(false, "เชื่อมข้อมูลร่วมไม่ได้ ใช้ข้อมูลในเครื่องแทน"); });
+  });
+}
+if(window.claude && window.claude.use){
+  window.claude.use("downloads").then(function(d){
+    downloads = d;
+    document.getElementById("dlNote").textContent = d
+      ? "ไฟล์ CSV เข้ารหัส UTF-8 พร้อม BOM เปิดใน Excel ได้โดยตรง"
+      : "ไฟล์ CSV เข้ารหัส UTF-8 พร้อม BOM เปิดใน Excel ได้โดยตรง";
+  });
+}
+})();
+</script>
+</body>
+</html>
